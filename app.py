@@ -7,7 +7,7 @@ from config import token
 from default_keyboards import *
 
 storage = MemoryStorage()
-bot = Bot(token=token)
+bot = Bot(token=token, proxy="http://proxy.server:3128")
 dp = Dispatcher(bot, storage=storage)
 
 
