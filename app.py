@@ -2,12 +2,12 @@ from aiogram import Dispatcher, executor, Bot, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 
-from inline_keyboards import buy_product
+from inline_keyboards import plus_minus_bttn, buy
 from config import token
 from default_keyboards import *
 
 storage = MemoryStorage()
-bot = Bot(token=token, proxy="http://proxy.server:3128")
+bot = Bot(token=token)
 dp = Dispatcher(bot, storage=storage)
 
 
@@ -83,9 +83,9 @@ async def products_handler(message: types.Message, state: FSMContext):
     await message.answer(text=text, reply_markup=product_inside_menu)
 
 
-@dp.message_handler(text="Burger")
+@dp.message_handler(text="Gamburger")
 async def products_handler(message: types.Message, state: FSMContext):
-    await state.update_data(product="Burger")
+    await state.update_data(product="Gamburger")
     text = "Tanlang."
     await message.answer(text=text, reply_markup=product_inside_menu)
 
@@ -101,15 +101,15 @@ async def products_handler(message: types.Message, state: FSMContext):
         photo = "https://cp.ectn.uz/files//web/lavash_kur.png"
         text = "Katta lavash"
         await state.update_data(price=32000)
-    elif product_name == "Burger":
+    elif product_name == "Gamburger":
         await state.update_data(price=39000)
         photo = "https://cp.ectn.uz/files//web/15.jpg"
         text = "Katta burger"
 
-    await message.answer_photo(photo=photo, caption=text, reply_markup=buy_product)
+    await message.answer_photo(photo=photo, caption=text, reply_markup=await plus_minus_bttn(0))
 
 
-@dp.message_handler(text="Kichkina")
+@dp.message_handler(text="Kichik")
 async def products_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.update_data(size="little")
@@ -120,12 +120,12 @@ async def products_handler(message: types.Message, state: FSMContext):
         await state.update_data(price=28000, product="Lavash mini")
         photo = "https://cp.ectn.uz/files//web/lavash_kur.png"
         text = "Kichkina lavash"
-    elif product_name == "Burger":
+    elif product_name == "Gamburger":
         await state.update_data(price=32000, product="Burger mini")
         photo = "https://cp.ectn.uz/files//web/15.jpg"
         text = "Kichkina burger"
 
-    await message.answer_photo(photo=photo, caption=text, reply_markup=buy_product)
+    await message.answer_photo(photo=photo, caption=text, reply_markup=await plus_minus_bttn(0))
 
 
 @dp.callback_query_handler(text="plus")
@@ -147,7 +147,25 @@ async def plus_handler(call: types.CallbackQuery, state: FSMContext):
     await state.update_data(basket=basket)
     text = "Mahsulot bittaga oshirildi. ✅"
     await call.answer(text=text)
+    await call.message.edit_reply_markup(reply_markup=await plus_minus_bttn(basket[product]['quantity']))
 
+@dp.callback_query_handler(text="minus")
+async def plus_handler(call: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    product = data.get('product')
+    price = data.get('price')
+    size = data.get('size')
+    basket = data.get('basket') if data.get('basket') else dict()
+    if basket[product]['quantity'] > 0:
+        basket[product]['quantity'] -= 1
+        basket[product]['price'] -= price
+        text = "Mahsulot bittaga kamaytirildi. ✅"
+        await state.update_data(basket=basket)
+        await call.answer(text=text)
+        await call.message.edit_reply_markup(reply_markup=await plus_minus_bttn(basket[product]['quantity']))
+    else:
+        text = f"Kechirasiz Ayirish Uchun Minimal 1 Ta Bolishi Kerak!"
+        await call.answer(text=text)
 
 @dp.callback_query_handler(text="show_basket")
 async def buy_product_handler(call: types.CallbackQuery, state: FSMContext):
@@ -155,13 +173,36 @@ async def buy_product_handler(call: types.CallbackQuery, state: FSMContext):
     basket = data.get("basket")
     text = ""
     total = 0
-    for product in basket.values():
-        total_price = product['quantity'] * product['price']
-        total += total_price
-        text += f"{product['name']} | {product['size']} | {product['quantity']} | {product['price']} | {total_price}\n"
-    text += f"\n\nJami: {total}"
-    await call.message.answer(text=text)
+    try:
+        for product in basket.values():
+            total_price = product['quantity'] * product['price']
+            total += total_price
+            text += f"{product['name']} | {product['size']} | {product['quantity']} | {product['price']} | {total_price}\n"
+        text += f"\n\nJami: {total}"
+        await call.message.answer(text=text, reply_markup=buy)
+    except Exception as e:
+        text = f"😕 Sizni Savatingiz Bom Bosh!"
+        await call.answer(text=text)
 
+@dp.callback_query_handler(text="buy")
+async def buy_handler(call: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    basket = data.get("basket")
+    adminga = "Mahsulotlar:\n"
+    total = 0
+    try:
+        text = f"✅ Buyurtmangiz Qabul Qilindi!"
+        for product in basket.values():
+            total_price = product['quantity'] * product['price']
+            total += total_price
+            adminga += f"{product['name']} \t| <b>{product['size']}</b> \t| {product['quantity']} Ta \t"
+        adminga += f"\n\n<b>Ja'mi</b>: {total}"
+        await dp.bot.send_message(text=adminga, chat_id=5596277119)
+        await call.answer(text=text)
+    except Exception as e:
+        text = f"😕 Sizni Savatingiz Bom Bosh!"
+        await call.message.answer(text=text)
+    await state.finish()
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
